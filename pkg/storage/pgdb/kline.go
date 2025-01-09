@@ -1,4 +1,4 @@
-package kline
+package pgdb
 
 import (
 	"context"
@@ -10,21 +10,13 @@ import (
 	"strings"
 )
 
-type Client struct {
-	conn *pgx.Conn
-}
-
-func NewClient(conn *pgx.Conn) *Client {
-	return &Client{conn: conn}
-}
-
 type Kline struct {
 	OpenTime  int64
-	Open      string
-	High      string
-	Low       string
-	Close     string
-	Volume    string
+	Open      float64
+	High      float64
+	Low       float64
+	Close     float64
+	Volume    float64
 	CloseTime int64
 	TradeNum  int64
 }
@@ -35,7 +27,7 @@ type ReadKlineRequest struct {
 	OpenTime int64
 }
 
-func (c *Client) ReadKline(ctx context.Context, req *ReadKlineRequest) (*Kline, error) {
+func (c *Client) ReadKline(ctx context.Context, req ReadKlineRequest) (*Kline, error) {
 	tx, err := c.conn.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -62,32 +54,40 @@ func (c *Client) ReadKline(ctx context.Context, req *ReadKlineRequest) (*Kline, 
 }
 
 type ReadKlinesRequest struct {
-	Symbol   string
-	Interval string
-	OpenTime int64
-	Limit    uint64
-	Offset   uint64
+	Symbol    string
+	Interval  string
+	OpenTime  int64
+	CloseTime int64
+	Limit     uint64
+	Offset    uint64
 }
 
-func (c *Client) ReadKlines(ctx context.Context, req *ReadKlinesRequest) ([]*Kline, error) {
+func (c *Client) ReadKlines(ctx context.Context, req ReadKlinesRequest) ([]*Kline, error) {
 	tx, err := c.conn.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	query, args, err := sq.
+	query := sq.
 		Select("open_time", "open", "high", "low", "close", "volume", "close_time", "trade_num").
 		From(fmt.Sprintf("kline_%s_%s", strings.ToLower(req.Symbol), strings.ToLower(req.Interval))).
-		Where("open_time = ?", req.OpenTime).
-		Limit(req.Limit).
-		Offset(req.Offset).
-		PlaceholderFormat(sq.Dollar).
-		ToSql()
+		Where("open_time >= ?", req.OpenTime).
+		PlaceholderFormat(sq.Dollar)
+	if req.CloseTime > 0 {
+		query = query.Where("close_time <= ?", req.CloseTime)
+	}
+	if req.Limit > 0 {
+		query = query.Limit(req.Limit)
+	}
+	if req.Offset > 0 {
+		query = query.Offset(req.Offset)
+	}
+	queryStr, args, err := query.ToSql()
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := tx.Query(ctx, query, args...)
+	rows, err := tx.Query(ctx, queryStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ type WriteKlineRequest struct {
 	Kline    *Kline
 }
 
-func (c *Client) WriteKline(ctx context.Context, req *WriteKlineRequest) (*Kline, error) {
+func (c *Client) WriteKline(ctx context.Context, req WriteKlineRequest) (*Kline, error) {
 	tx, err := c.conn.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (c *Client) WriteKline(ctx context.Context, req *WriteKlineRequest) (*Kline
 			log.Printf("Rollback failed: %v", err)
 		}
 	}()
-	if err = createTableIfNotExists(ctx, tx, req.Symbol, req.Interval); err != nil {
+	if err = createKlineTableIfNotExists(ctx, tx, req.Symbol, req.Interval); err != nil {
 		return nil, err
 	}
 
@@ -153,7 +153,7 @@ type WriteKlinesRequest struct {
 	Klines   []*Kline
 }
 
-func (c *Client) WriteKlines(ctx context.Context, req *WriteKlinesRequest) ([]*Kline, error) {
+func (c *Client) WriteKlines(ctx context.Context, req WriteKlinesRequest) ([]*Kline, error) {
 	tx, err := c.conn.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (c *Client) WriteKlines(ctx context.Context, req *WriteKlinesRequest) ([]*K
 			log.Printf("Rollback failed: %v", err)
 		}
 	}()
-	if err = createTableIfNotExists(ctx, tx, req.Symbol, req.Interval); err != nil {
+	if err = createKlineTableIfNotExists(ctx, tx, req.Symbol, req.Interval); err != nil {
 		return nil, err
 	}
 
@@ -189,10 +189,4 @@ func (c *Client) WriteKlines(ctx context.Context, req *WriteKlinesRequest) ([]*K
 		return nil, err
 	}
 	return req.Klines, nil
-}
-
-func createTableIfNotExists(ctx context.Context, tx pgx.Tx, symbol, interval string) error {
-	_, err := tx.Exec(ctx, fmt.Sprintf("create table if not exists kline_%s_%s as table kline with no data;",
-		strings.ToLower(symbol), strings.ToLower(interval)))
-	return err
 }

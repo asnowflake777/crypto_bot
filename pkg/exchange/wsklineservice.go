@@ -19,20 +19,20 @@ type WsKlineEvent struct {
 }
 
 type WsKline struct {
-	StartTime            int64  `json:"t"`
-	EndTime              int64  `json:"T"`
-	Symbol               string `json:"s"`
-	Interval             string `json:"i"`
-	FirstTradeID         int64  `json:"f"`
-	LastTradeID          int64  `json:"L"`
-	Open                 string `json:"o"`
-	Close                string `json:"c"`
-	High                 string `json:"h"`
-	Low                  string `json:"l"`
-	Volume               string `json:"v"`
-	TradeNum             int64  `json:"n"`
-	IsFinal              bool   `json:"x"`
-	QuoteVolume          string `json:"q"`
-	ActiveBuyVolume      string `json:"V"`
-	ActiveBuyQuoteVolume string `json:"Q"`
+	StartTime            int64   `json:"t"`
+	EndTime              int64   `json:"T"`
+	Symbol               string  `json:"s"`
+	Interval             string  `json:"i"`
+	FirstTradeID         int64   `json:"f"`
+	LastTradeID          int64   `json:"L"`
+	Open                 float64 `json:"o"`
+	Close                float64 `json:"c"`
+	High                 float64 `json:"h"`
+	Low                  float64 `json:"l"`
+	Volume               float64 `json:"v"`
+	TradeNum             int64   `json:"n"`
+	IsFinal              bool    `json:"x"`
+	QuoteVolume          float64 `json:"q"`
+	ActiveBuyVolume      float64 `json:"V"`
+	ActiveBuyQuoteVolume float64 `json:"Q"`
 }

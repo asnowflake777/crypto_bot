@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto_bot/pkg/exchange"
 	"crypto_bot/pkg/exchange/binance"
-	"crypto_bot/pkg/storage/kline"
+	"crypto_bot/pkg/storage/pgdb"
 	"flag"
 	"github.com/jackc/pgx/v5"
 	"log"
@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db := kline.NewClient(conn)
+	db := pgdb.NewClient(conn)
 
 	events, errs, err := c.WsKlines(ctx, exchange.WsKlineRequest{Symbol: flags.symbol, Interval: flags.interval})
 	if err != nil {
@@ -58,13 +58,13 @@ func main() {
 	}
 }
 
-func watch(ctx context.Context, events <-chan *exchange.WsKlineEvent, db *kline.Client) error {
-	klinesToWrite := make([]*kline.Kline, 0, flags.chunkSize)
+func watch(ctx context.Context, events <-chan *exchange.WsKlineEvent, db *pgdb.Client) error {
+	klinesToWrite := make([]*pgdb.Kline, 0, flags.chunkSize)
 	for event := range events {
 		if !event.Kline.IsFinal {
 			continue
 		}
-		klinesToWrite = append(klinesToWrite, &kline.Kline{
+		klinesToWrite = append(klinesToWrite, &pgdb.Kline{
 			OpenTime:  event.Kline.StartTime,
 			Open:      event.Kline.Open,
 			High:      event.Kline.High,
@@ -75,7 +75,7 @@ func watch(ctx context.Context, events <-chan *exchange.WsKlineEvent, db *kline.
 			TradeNum:  event.Kline.TradeNum,
 		})
 		if len(klinesToWrite) >= flags.chunkSize {
-			_, err := db.WriteKlines(ctx, &kline.WriteKlinesRequest{
+			_, err := db.WriteKlines(ctx, pgdb.WriteKlinesRequest{
 				Symbol:   flags.symbol,
 				Interval: flags.interval,
 				Klines:   klinesToWrite,
