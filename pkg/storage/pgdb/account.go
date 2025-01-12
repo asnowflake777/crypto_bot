@@ -2,11 +2,12 @@ package pgdb
 
 import (
 	"context"
+
 	sq "github.com/Masterminds/squirrel"
 )
 
 type User struct {
-	UID   string
+	UID   int64
 	Login string
 }
 
@@ -39,7 +40,7 @@ func (c *Client) CreateUser(ctx context.Context, r CreateUserRequest) (*User, er
 }
 
 type ReadUserRequest struct {
-	UID   string
+	UID   int64
 	Login string
 }
 
@@ -48,7 +49,7 @@ func (c *Client) ReadUser(ctx context.Context, r ReadUserRequest) (*User, error)
 		Select("uid", "login").
 		From("users").
 		PlaceholderFormat(sq.Dollar)
-	if r.UID != "" {
+	if r.UID > 0 {
 		query = query.Where(sq.Eq{"uid": r.UID})
 	}
 	if r.Login != "" {
@@ -66,14 +67,14 @@ func (c *Client) ReadUser(ctx context.Context, r ReadUserRequest) (*User, error)
 }
 
 type UpdateUserRequest struct {
-	UID   string
+	UID   int64
 	Login string
 }
 
 func (c *Client) UpdateUser(ctx context.Context, r UpdateUserRequest) (*User, error) {
 	queryStr, args, err := sq.
 		Update("users").
-		Set("login = ?", r.Login).
+		Set("login", r.Login).
 		Where(sq.Eq{"uid": r.UID}).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
@@ -87,7 +88,7 @@ func (c *Client) UpdateUser(ctx context.Context, r UpdateUserRequest) (*User, er
 }
 
 type DeleteUserRequest struct {
-	UID string
+	UID int64
 }
 
 func (c *Client) DeleteUser(ctx context.Context, r DeleteUserRequest) error {
@@ -106,7 +107,7 @@ func (c *Client) DeleteUser(ctx context.Context, r DeleteUserRequest) error {
 }
 
 type CreateBalanceRequest struct {
-	UserUID string
+	UserUID int64
 	Asset   string
 	Free    float64
 	Locked  float64
@@ -129,7 +130,7 @@ func (c *Client) CreateBalance(ctx context.Context, r CreateBalanceRequest) (*Ba
 }
 
 type ReadBalanceRequest struct {
-	UserUID string
+	UserUID int64
 	Asset   string
 }
 
@@ -151,7 +152,7 @@ func (c *Client) ReadBalance(ctx context.Context, r ReadBalanceRequest) (*Balanc
 }
 
 type ReadBalancesRequest struct {
-	UserUID string
+	UserUID int64
 }
 
 func (c *Client) ReadBalances(ctx context.Context, r ReadBalancesRequest) ([]*Balance, error) {
@@ -186,7 +187,7 @@ func (c *Client) ReadBalances(ctx context.Context, r ReadBalancesRequest) ([]*Ba
 }
 
 type UpdateBalanceRequest struct {
-	UserUID string
+	UserUID int64
 	Asset   string
 	Free    float64
 	Locked  float64
@@ -210,7 +211,7 @@ func (c *Client) UpdateBalance(ctx context.Context, r UpdateBalanceRequest) (*Ba
 }
 
 type DeleteBalanceRequest struct {
-	UserUID string
+	UserUID int64
 	Asset   string
 }
 

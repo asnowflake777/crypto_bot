@@ -2,7 +2,10 @@ package binance
 
 import (
 	"context"
+
 	"crypto_bot/pkg/exchange"
+	"crypto_bot/pkg/exchange/utils"
+
 	"github.com/adshao/go-binance/v2"
 )
 
@@ -36,7 +39,7 @@ func (c Client) Klines(ctx context.Context, r exchange.KlinesRequest) (res []*ex
 	}
 	klines := make([]*exchange.Kline, len(extKlines))
 	for i, kline := range extKlines {
-		klines[i] = FromExtKlineToInt(kline)
+		klines[i] = utils.FromExtKlineToInt(kline)
 	}
 	return klines, nil
 }
@@ -49,7 +52,7 @@ func errHandler(errs chan error) func(error) {
 
 func eventHandler(events chan *exchange.WsKlineEvent) func(*binance.WsKlineEvent) {
 	return func(event *binance.WsKlineEvent) {
-		events <- FromExtWsKlineEventToInt(event)
+		events <- utils.FromExtWsKlineEventToInt(event)
 	}
 }
 
@@ -86,8 +89,8 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 		Side(binance.SideType(r.Side)).
 		Type(binance.OrderType(r.Type)).
 		TimeInForce(binance.TimeInForceType(r.InTimeForce)).
-		Quantity(float2str(r.Quantity)).
-		Price(float2str(r.Price)).
+		Quantity(utils.Float2str(r.Quantity)).
+		Price(utils.Float2str(r.Price)).
 		Do(ctx)
 	if err != nil {
 		return nil, err
@@ -96,10 +99,10 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 	for i, fill := range order.Fills {
 		fills[i] = &exchange.Fill{
 			TradeID:         fill.TradeID,
-			Price:           str2float(fill.Price),
-			Quantity:        str2float(fill.Quantity),
-			Commission:      str2float(fill.Commission),
-			CommissionAsset: str2float(fill.CommissionAsset),
+			Price:           utils.Str2float(fill.Price),
+			Quantity:        utils.Str2float(fill.Quantity),
+			Commission:      utils.Str2float(fill.Commission),
+			CommissionAsset: utils.Str2float(fill.CommissionAsset),
 		}
 	}
 	return &exchange.CreateOrderResponse{
@@ -107,18 +110,18 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 		OrderID:                  order.OrderID,
 		ClientOrderID:            order.ClientOrderID,
 		TransactTime:             order.TransactTime,
-		Price:                    str2float(order.Price),
-		OrigQuantity:             str2float(order.OrigQuantity),
-		ExecutedQuantity:         str2float(order.ExecutedQuantity),
-		CummulativeQuoteQuantity: str2float(order.CummulativeQuoteQuantity),
+		Price:                    utils.Str2float(order.Price),
+		OrigQuantity:             utils.Str2float(order.OrigQuantity),
+		ExecutedQuantity:         utils.Str2float(order.ExecutedQuantity),
+		CummulativeQuoteQuantity: utils.Str2float(order.CummulativeQuoteQuantity),
 		IsIsolated:               order.IsIsolated,
 		Status:                   exchange.OrderStatusType(order.Status),
 		TimeInForce:              exchange.TimeInForceType(order.TimeInForce),
 		Type:                     exchange.OrderType(order.Type),
 		Side:                     exchange.SideType(order.Side),
 		Fills:                    fills,
-		MarginBuyBorrowAmount:    str2float(order.MarginBuyBorrowAmount),
-		MarginBuyBorrowAsset:     str2float(order.MarginBuyBorrowAsset),
+		MarginBuyBorrowAmount:    utils.Str2float(order.MarginBuyBorrowAmount),
+		MarginBuyBorrowAsset:     utils.Str2float(order.MarginBuyBorrowAsset),
 		SelfTradePreventionMode:  exchange.SelfTradePreventionMode(order.SelfTradePreventionMode),
 	}, nil
 }
@@ -128,7 +131,7 @@ func (c Client) GetOrder(ctx context.Context, r exchange.ReadOrderRequest) (*exc
 	if err != nil {
 		return nil, err
 	}
-	return FromExtOrderToInt(o), nil
+	return utils.FromExtOrderToInt(o), nil
 }
 
 func (c Client) CancelOrder(ctx context.Context, r exchange.CancelOrderRequest) (*exchange.CancelOrderResponse, error) {
@@ -143,10 +146,10 @@ func (c Client) CancelOrder(ctx context.Context, r exchange.CancelOrderRequest) 
 		OrderListID:              o.OrderListID,
 		ClientOrderID:            o.ClientOrderID,
 		TransactTime:             o.TransactTime,
-		Price:                    str2float(o.Price),
-		OrigQuantity:             str2float(o.OrigQuantity),
-		ExecutedQuantity:         str2float(o.ExecutedQuantity),
-		CummulativeQuoteQuantity: str2float(o.CummulativeQuoteQuantity),
+		Price:                    utils.Str2float(o.Price),
+		OrigQuantity:             utils.Str2float(o.OrigQuantity),
+		ExecutedQuantity:         utils.Str2float(o.ExecutedQuantity),
+		CummulativeQuoteQuantity: utils.Str2float(o.CummulativeQuoteQuantity),
 		Status:                   exchange.OrderStatusType(o.Status),
 		TimeInForce:              exchange.TimeInForceType(o.TimeInForce),
 		Type:                     exchange.OrderType(o.Type),
@@ -162,7 +165,7 @@ func (c Client) ListOrders(ctx context.Context, r exchange.ListOrdersRequest) ([
 	}
 	res := make([]*exchange.Order, len(orders))
 	for i, o := range orders {
-		res[i] = FromExtOrderToInt(o)
+		res[i] = utils.FromExtOrderToInt(o)
 	}
 	return res, err
 }
@@ -174,7 +177,7 @@ func (c Client) ListOpenOrders(ctx context.Context, r exchange.ListOpenOrdersReq
 	}
 	res := make([]*exchange.Order, len(openOrders))
 	for i, o := range openOrders {
-		res[i] = FromExtOrderToInt(o)
+		res[i] = utils.FromExtOrderToInt(o)
 	}
 	return res, err
 }

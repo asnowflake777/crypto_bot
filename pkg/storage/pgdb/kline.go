@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 	"log"
 	"strings"
+
+	sq "github.com/Masterminds/squirrel"
+	"github.com/jackc/pgx/v5"
 )
 
 type Kline struct {

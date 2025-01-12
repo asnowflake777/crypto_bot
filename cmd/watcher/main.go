@@ -2,14 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto_bot/pkg/exchange"
-	"crypto_bot/pkg/exchange/binance"
-	"crypto_bot/pkg/storage/pgdb"
 	"flag"
-	"github.com/jackc/pgx/v5"
 	"log"
 	"os"
 	"os/signal"
+
+	"github.com/jackc/pgx/v5"
+
+	"crypto_bot/pkg/exchange"
+	"crypto_bot/pkg/exchange/binance"
+	"crypto_bot/pkg/storage/pgdb"
 )
 
 var flags = struct {
