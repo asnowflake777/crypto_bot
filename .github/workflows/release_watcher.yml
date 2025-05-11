@@ -4,6 +4,7 @@
 name: Release watcher
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
