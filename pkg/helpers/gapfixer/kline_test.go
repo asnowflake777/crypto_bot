@@ -15,58 +15,110 @@ import (
 
 func TestFindGaps(t *testing.T) {
 	testCases := []struct {
-		name   string
-		klines []*pgdb.Kline
-		delta  int64
-		want   []gap
+		name      string
+		klines    []*pgdb.Kline
+		from, to  int64
+		chunkSize int
+		want      []gap
 	}{
 		{
-			name:   "no klines",
+			name:   "no params",
 			klines: []*pgdb.Kline{},
-			want:   nil,
+			want:   []gap{{start: 0, end: 0}},
 		},
 		{
 			name: "one kline",
 			klines: []*pgdb.Kline{
 				{OpenTime: 0, CloseTime: 9},
 			},
-			want: nil,
+			from:      0,
+			to:        10,
+			chunkSize: 1,
+			want:      nil,
 		},
 		{
-			name:  "no gaps",
-			delta: 1,
+			name: "no gaps",
 			klines: []*pgdb.Kline{
 				{OpenTime: 0, CloseTime: 9},
 				{OpenTime: 10, CloseTime: 19},
 				{OpenTime: 20, CloseTime: 29},
 				{OpenTime: 30, CloseTime: 39},
 			},
-			want: nil,
+			from:      0,
+			to:        40,
+			chunkSize: 4,
+			want:      nil,
 		},
 		{
-			name:  "one gap",
-			delta: 10,
+			name: "gap in middle",
 			klines: []*pgdb.Kline{
 				{OpenTime: 0, CloseTime: 9},
 				{OpenTime: 30, CloseTime: 39},
-			},
-			want: []gap{{start: 10, end: 30}},
-		},
-		{
-			name:  "a few gaps",
-			delta: 5,
-			klines: []*pgdb.Kline{
-				{OpenTime: 0, CloseTime: 9},
-				{OpenTime: 30, CloseTime: 34},
+				{OpenTime: 40, CloseTime: 49},
 				{OpenTime: 50, CloseTime: 59},
 			},
-			want: []gap{{start: 10, end: 30}, {start: 35, end: 50}},
+			from:      0,
+			to:        60,
+			chunkSize: 4,
+			want:      []gap{{start: 10, end: 29}},
+		},
+		{
+			name: "a few gaps in middle",
+			klines: []*pgdb.Kline{
+				{OpenTime: 0, CloseTime: 9},
+				{OpenTime: 30, CloseTime: 39},
+				{OpenTime: 50, CloseTime: 59},
+			},
+			from:      0,
+			chunkSize: 6,
+			want:      []gap{{start: 10, end: 29}, {start: 40, end: 49}},
+		},
+		{
+			name: "all possible gaps",
+			klines: []*pgdb.Kline{
+				{OpenTime: 10, CloseTime: 19},
+				{OpenTime: 30, CloseTime: 39},
+				{OpenTime: 50, CloseTime: 59},
+			},
+			from:      0,
+			to:        100,
+			chunkSize: 3,
+			want:      []gap{{start: 0, end: 9}, {start: 20, end: 29}, {start: 40, end: 49}},
+		},
+		{
+			name: "empty start",
+			klines: []*pgdb.Kline{
+				{OpenTime: 40, CloseTime: 49},
+				{OpenTime: 50, CloseTime: 59},
+			},
+			from:      0,
+			chunkSize: 6,
+			want:      []gap{{start: 0, end: 39}},
+		},
+		{
+			name: "empty end",
+			klines: []*pgdb.Kline{
+				{OpenTime: 30, CloseTime: 39},
+				{OpenTime: 40, CloseTime: 49},
+				{OpenTime: 50, CloseTime: 59},
+			},
+			from:      30,
+			to:        90,
+			chunkSize: 6,
+			want:      []gap{{start: 60, end: 90}},
+		},
+		{
+			name:   "empty klines",
+			klines: []*pgdb.Kline{},
+			from:   0,
+			to:     60,
+			want:   []gap{{start: 0, end: 60}},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.Equal(t, tc.want, findGaps(tc.klines, tc.delta))
+			require.Equal(t, tc.want, findGaps(tc.klines, tc.from, tc.to, tc.chunkSize))
 		})
 	}
 }
@@ -81,34 +133,40 @@ func TestFixGaps_NoStartKlines(t *testing.T) {
 	to := from.Add(5 * time.Minute)
 
 	s.EXPECT().
-		ReadKlines(gomock.Any(), pgdb.ReadKlinesRequest{Symbol: symbol, Interval: interval, OpenTime: from.UnixMilli(), CloseTime: to.UnixMilli(), Limit: 2}).
+		ReadKlines(gomock.Any(), pgdb.ReadKlinesRequest{Symbol: symbol, Interval: interval,
+			OpenTime:  from.UnixMilli(),
+			CloseTime: to.UnixMilli(), Limit: 2}).
 		Return([]*pgdb.Kline{
 			{OpenTime: to.Add(-1 * time.Minute).UnixMilli(), CloseTime: to.Add(-1 * time.Millisecond).UnixMilli()},
 		}, nil)
 
 	ex.EXPECT().
-		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval, StartTime: from.UnixMilli(), EndTime: to.Add(-1*time.Minute - 1*time.Millisecond).UnixMilli(), Limit: 2}).
+		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval,
+			StartTime: from.UnixMilli(),
+			EndTime:   to.Add(-1*time.Minute).UnixMilli() - 1, Limit: 2}).
 		Return([]*models.Kline{
-			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute).UnixMilli() - 1},
 		}, nil)
 	s.EXPECT().WriteKlines(gomock.Any(), pgdb.WriteKlinesRequest{Symbol: symbol, Interval: interval,
 		Klines: []*pgdb.Kline{
-			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute).UnixMilli() - 1},
 		},
 	}).Return(nil, nil)
 
 	ex.EXPECT().
-		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval, StartTime: from.Add(2 * time.Minute).UnixMilli(), EndTime: to.Add(-1*time.Minute - 1*time.Millisecond).UnixMilli(), Limit: 2}).
+		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval,
+			StartTime: from.Add(2 * time.Minute).UnixMilli(),
+			EndTime:   to.Add(-1*time.Minute).UnixMilli() - 1, Limit: 2}).
 		Return([]*models.Kline{
-			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute).UnixMilli() - 1},
 		}, nil)
 	s.EXPECT().WriteKlines(gomock.Any(), pgdb.WriteKlinesRequest{Symbol: symbol, Interval: interval,
 		Klines: []*pgdb.Kline{
-			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute).UnixMilli() - 1},
 		},
 	}).Return(nil, nil)
 
@@ -126,34 +184,40 @@ func TestFixGaps_NoEndKlines(t *testing.T) {
 	to := from.Add(5 * time.Minute)
 
 	s.EXPECT().
-		ReadKlines(gomock.Any(), pgdb.ReadKlinesRequest{Symbol: symbol, Interval: interval, OpenTime: from.UnixMilli(), CloseTime: to.UnixMilli(), Limit: 2}).
+		ReadKlines(gomock.Any(), pgdb.ReadKlinesRequest{Symbol: symbol, Interval: interval,
+			OpenTime:  from.UnixMilli(),
+			CloseTime: to.UnixMilli(), Limit: 2}).
 		Return([]*pgdb.Kline{
-			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.UnixMilli(), CloseTime: from.Add(1*time.Minute).UnixMilli() - 1},
 		}, nil)
 
 	ex.EXPECT().
-		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval, StartTime: from.Add(1 * time.Minute).UnixMilli(), EndTime: to.UnixMilli(), Limit: 2}).
+		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval,
+			StartTime: from.Add(1 * time.Minute).UnixMilli(),
+			EndTime:   to.UnixMilli(), Limit: 2}).
 		Return([]*models.Kline{
-			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute).UnixMilli() - 1},
 		}, nil)
 	s.EXPECT().WriteKlines(gomock.Any(), pgdb.WriteKlinesRequest{Symbol: symbol, Interval: interval,
 		Klines: []*pgdb.Kline{
-			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(1 * time.Minute).UnixMilli(), CloseTime: from.Add(2*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(2 * time.Minute).UnixMilli(), CloseTime: from.Add(3*time.Minute).UnixMilli() - 1},
 		},
 	}).Return(nil, nil)
 
 	ex.EXPECT().
-		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval, StartTime: from.Add(3 * time.Minute).UnixMilli(), EndTime: to.UnixMilli(), Limit: 2}).
+		Klines(gomock.Any(), models.KlinesRequest{Symbol: symbol, Interval: interval,
+			StartTime: from.Add(3 * time.Minute).UnixMilli(),
+			EndTime:   to.UnixMilli(), Limit: 2}).
 		Return([]*models.Kline{
-			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(4 * time.Minute).UnixMilli(), CloseTime: to.Add(5*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(4 * time.Minute).UnixMilli(), CloseTime: to.Add(5*time.Minute).UnixMilli() - 1},
 		}, nil)
 	s.EXPECT().WriteKlines(gomock.Any(), pgdb.WriteKlinesRequest{Symbol: symbol, Interval: interval,
 		Klines: []*pgdb.Kline{
-			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute - 1*time.Millisecond).UnixMilli()},
-			{OpenTime: from.Add(4 * time.Minute).UnixMilli(), CloseTime: to.Add(5*time.Minute - 1*time.Millisecond).UnixMilli()},
+			{OpenTime: from.Add(3 * time.Minute).UnixMilli(), CloseTime: from.Add(4*time.Minute).UnixMilli() - 1},
+			{OpenTime: from.Add(4 * time.Minute).UnixMilli(), CloseTime: to.Add(5*time.Minute).UnixMilli() - 1},
 		},
 	}).Return(nil, nil)
 

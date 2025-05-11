@@ -35,22 +35,12 @@ func FixGaps(ctx context.Context, ex Exchange, s Storage, symbol, interval strin
 			OpenTime:  openTime,
 			CloseTime: closeTime,
 			Limit:     uint64(chunkSize),
-			Offset:    uint64(chunkSize * i),
 		})
 		if err != nil {
 			return fmt.Errorf("read klines: %w", err)
 		}
 
-		gaps := findGaps(klines, MaxDelta)
-		if len(klines) == 0 {
-			gaps = []gap{{start: openTime, end: closeTime}}
-		}
-		if len(klines) > 0 && klines[0].OpenTime > openTime {
-			gaps = append([]gap{{start: openTime, end: klines[0].OpenTime - 1*time.Millisecond.Milliseconds()}}, gaps...)
-		}
-		if len(klines) > 0 && klines[len(klines)-1].CloseTime+MaxDelta < closeTime {
-			gaps = append(gaps, gap{start: klines[0].CloseTime + 1*time.Millisecond.Milliseconds(), end: closeTime})
-		}
+		gaps := findGaps(klines, openTime, closeTime, chunkSize)
 		for _, g := range gaps {
 			if err = fixGap(ctx, ex, s, symbol, interval, chunkSize, g); err != nil {
 				return fmt.Errorf("get gap klines: %w", err)
@@ -60,7 +50,7 @@ func FixGaps(ctx context.Context, ex Exchange, s Storage, symbol, interval strin
 		if len(klines) < chunkSize {
 			return nil
 		}
-		openTime = klines[len(klines)-1].CloseTime
+		openTime = klines[len(klines)-1].CloseTime + 1
 	}
 	return nil
 }
@@ -69,21 +59,39 @@ type gap struct {
 	start, end int64
 }
 
-func findGaps(klines []*pgdb.Kline, delta int64) []gap {
-	if len(klines) < 2 {
+func findGaps(klines []*pgdb.Kline, from, to int64, chunkSize int) []gap {
+	if len(klines) == 0 {
+		return []gap{{start: from, end: to}}
+	}
+
+	first, last := klines[0], klines[len(klines)-1]
+	duration := first.CloseTime - first.OpenTime + 1
+	chunkLastCloseTime := first.OpenTime + duration*int64(chunkSize) - 1
+	if len(klines) == chunkSize && first.OpenTime == from && last.CloseTime == chunkLastCloseTime {
 		return nil
 	}
+
 	var gaps []gap
+	if first.OpenTime > from {
+		gaps = append(gaps, gap{start: from, end: first.OpenTime - 1})
+	}
 	for i, j := 0, 1; j < len(klines); i, j = i+1, j+1 {
-		if klines[j].OpenTime-klines[i].CloseTime > delta {
-			gaps = append(gaps, gap{start: klines[i].CloseTime + 1, end: klines[j].OpenTime})
+		left, right := klines[i], klines[j]
+		if left.CloseTime+1 != right.OpenTime {
+			gaps = append(gaps, gap{start: klines[i].CloseTime + 1, end: klines[j].OpenTime - 1})
 		}
 	}
+
+	if len(klines) < chunkSize && last.CloseTime < to {
+		gaps = append(gaps, gap{start: last.CloseTime + 1, end: to})
+	}
+
 	return gaps
 }
 
 func fixGap(ctx context.Context, ex Exchange, s Storage, symbol, interval string, limit int, g gap) error {
 	for g.start < g.end {
+		fmt.Printf("fixGap: start: %d, end: %d\n", g.start, g.end)
 		klines, err := ex.Klines(ctx, models.KlinesRequest{
 			Symbol:    symbol,
 			Interval:  interval,

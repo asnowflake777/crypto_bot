@@ -73,6 +73,7 @@ func (c *Client) ReadKlines(ctx context.Context, req ReadKlinesRequest) ([]*Klin
 		Select("open_time", "open", "high", "low", "close", "volume", "close_time", "trade_num").
 		From(fmt.Sprintf("kline_%s_%s", strings.ToLower(req.Symbol), strings.ToLower(req.Interval))).
 		Where("open_time >= ?", req.OpenTime).
+		OrderBy("open_time").
 		PlaceholderFormat(sq.Dollar)
 	if req.CloseTime > 0 {
 		query = query.Where("close_time <= ?", req.CloseTime)
@@ -94,7 +95,10 @@ func (c *Client) ReadKlines(ctx context.Context, req ReadKlinesRequest) ([]*Klin
 	}
 	defer rows.Close()
 
-	klines := make([]*Kline, 0, 100)
+	klines := make([]*Kline, 0, req.Limit)
+	if req.Limit == 0 {
+		klines = make([]*Kline, 0, 100)
+	}
 	for rows.Next() {
 		kline := &Kline{}
 		err = rows.Scan(&kline.OpenTime, &kline.Open, &kline.High, &kline.Low, &kline.Close,
