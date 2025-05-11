@@ -1,10 +1,4 @@
-package exchange
-
-import "context"
-
-type AccountService interface {
-	GetAccount(ctx context.Context) (*Account, error)
-}
+package models
 
 type Account struct {
 	MakerCommission  int64           `json:"makerCommission"`

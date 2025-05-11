@@ -2,24 +2,25 @@ package binance
 
 import (
 	"context"
+	"fmt"
 
-	"crypto_bot/pkg/exchange"
+	"crypto_bot/pkg/exchange/models"
 	"crypto_bot/pkg/exchange/utils"
 
 	"github.com/adshao/go-binance/v2"
 )
 
+const MaxLimit = 5000
+
 type Client struct {
 	b *binance.Client
 }
-
-var _ exchange.Client = (*Client)(nil)
 
 func NewClient(apiKey, secretKey string) *Client {
 	return &Client{b: binance.NewClient(apiKey, secretKey)}
 }
 
-func (c Client) Klines(ctx context.Context, r exchange.KlinesRequest) (res []*exchange.Kline, err error) {
+func (c Client) Klines(ctx context.Context, r models.KlinesRequest) (res []*models.Kline, err error) {
 	s := c.b.NewKlinesService().
 		Symbol(r.Symbol).
 		Interval(r.Interval)
@@ -31,13 +32,16 @@ func (c Client) Klines(ctx context.Context, r exchange.KlinesRequest) (res []*ex
 		s = s.EndTime(r.EndTime)
 	}
 	if r.Limit > 0 {
+		if r.Limit > MaxLimit {
+			return nil, fmt.Errorf("limit exceeded")
+		}
 		s = s.Limit(r.Limit)
 	}
 	extKlines, err := s.Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	klines := make([]*exchange.Kline, len(extKlines))
+	klines := make([]*models.Kline, len(extKlines))
 	for i, kline := range extKlines {
 		klines[i] = utils.FromExtKlineToInt(kline)
 	}
@@ -50,15 +54,15 @@ func errHandler(errs chan error) func(error) {
 	}
 }
 
-func eventHandler(events chan *exchange.WsKlineEvent) func(*binance.WsKlineEvent) {
+func eventHandler(events chan *models.WsKlineEvent) func(*binance.WsKlineEvent) {
 	return func(event *binance.WsKlineEvent) {
 		events <- utils.FromExtWsKlineEventToInt(event)
 	}
 }
 
-func (c Client) WsKlines(ctx context.Context, r exchange.WsKlineRequest) (<-chan *exchange.WsKlineEvent, <-chan error, error) {
+func (c Client) WsKlines(ctx context.Context, r models.WsKlineRequest) (<-chan *models.WsKlineEvent, <-chan error, error) {
 	errs := make(chan error, 100)
-	events := make(chan *exchange.WsKlineEvent, 100)
+	events := make(chan *models.WsKlineEvent, 100)
 
 	closeChans := func() {
 		close(errs)
@@ -83,7 +87,7 @@ func (c Client) WsKlines(ctx context.Context, r exchange.WsKlineRequest) (<-chan
 	return events, errs, nil
 }
 
-func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) (*exchange.CreateOrderResponse, error) {
+func (c Client) CreateOrder(ctx context.Context, r models.CreateOrderRequest) (*models.CreateOrderResponse, error) {
 	order, err := c.b.NewCreateOrderService().
 		Symbol(r.Symbol).
 		Side(binance.SideType(r.Side)).
@@ -95,9 +99,9 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 	if err != nil {
 		return nil, err
 	}
-	fills := make([]*exchange.Fill, len(order.Fills))
+	fills := make([]*models.Fill, len(order.Fills))
 	for i, fill := range order.Fills {
-		fills[i] = &exchange.Fill{
+		fills[i] = &models.Fill{
 			TradeID:         fill.TradeID,
 			Price:           utils.Str2float(fill.Price),
 			Quantity:        utils.Str2float(fill.Quantity),
@@ -105,7 +109,7 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 			CommissionAsset: utils.Str2float(fill.CommissionAsset),
 		}
 	}
-	return &exchange.CreateOrderResponse{
+	return &models.CreateOrderResponse{
 		Symbol:                   order.Symbol,
 		OrderID:                  order.OrderID,
 		ClientOrderID:            order.ClientOrderID,
@@ -115,18 +119,18 @@ func (c Client) CreateOrder(ctx context.Context, r exchange.CreateOrderRequest) 
 		ExecutedQuantity:         utils.Str2float(order.ExecutedQuantity),
 		CummulativeQuoteQuantity: utils.Str2float(order.CummulativeQuoteQuantity),
 		IsIsolated:               order.IsIsolated,
-		Status:                   exchange.OrderStatusType(order.Status),
-		TimeInForce:              exchange.TimeInForceType(order.TimeInForce),
-		Type:                     exchange.OrderType(order.Type),
-		Side:                     exchange.SideType(order.Side),
+		Status:                   models.OrderStatusType(order.Status),
+		TimeInForce:              models.TimeInForceType(order.TimeInForce),
+		Type:                     models.OrderType(order.Type),
+		Side:                     models.SideType(order.Side),
 		Fills:                    fills,
 		MarginBuyBorrowAmount:    utils.Str2float(order.MarginBuyBorrowAmount),
 		MarginBuyBorrowAsset:     utils.Str2float(order.MarginBuyBorrowAsset),
-		SelfTradePreventionMode:  exchange.SelfTradePreventionMode(order.SelfTradePreventionMode),
+		SelfTradePreventionMode:  models.SelfTradePreventionMode(order.SelfTradePreventionMode),
 	}, nil
 }
 
-func (c Client) GetOrder(ctx context.Context, r exchange.ReadOrderRequest) (*exchange.Order, error) {
+func (c Client) GetOrder(ctx context.Context, r models.ReadOrderRequest) (*models.Order, error) {
 	o, err := c.b.NewGetOrderService().Symbol(r.Symbol).OrderID(r.ID).Do(ctx)
 	if err != nil {
 		return nil, err
@@ -134,12 +138,12 @@ func (c Client) GetOrder(ctx context.Context, r exchange.ReadOrderRequest) (*exc
 	return utils.FromExtOrderToInt(o), nil
 }
 
-func (c Client) CancelOrder(ctx context.Context, r exchange.CancelOrderRequest) (*exchange.CancelOrderResponse, error) {
+func (c Client) CancelOrder(ctx context.Context, r models.CancelOrderRequest) (*models.CancelOrderResponse, error) {
 	o, err := c.b.NewCancelOrderService().Symbol(r.Symbol).OrderID(r.ID).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &exchange.CancelOrderResponse{
+	return &models.CancelOrderResponse{
 		Symbol:                   o.Symbol,
 		OrigClientOrderID:        o.OrigClientOrderID,
 		OrderID:                  o.OrderID,
@@ -150,53 +154,53 @@ func (c Client) CancelOrder(ctx context.Context, r exchange.CancelOrderRequest) 
 		OrigQuantity:             utils.Str2float(o.OrigQuantity),
 		ExecutedQuantity:         utils.Str2float(o.ExecutedQuantity),
 		CummulativeQuoteQuantity: utils.Str2float(o.CummulativeQuoteQuantity),
-		Status:                   exchange.OrderStatusType(o.Status),
-		TimeInForce:              exchange.TimeInForceType(o.TimeInForce),
-		Type:                     exchange.OrderType(o.Type),
-		Side:                     exchange.SideType(o.Side),
-		SelfTradePreventionMode:  exchange.SelfTradePreventionMode(o.SelfTradePreventionMode),
+		Status:                   models.OrderStatusType(o.Status),
+		TimeInForce:              models.TimeInForceType(o.TimeInForce),
+		Type:                     models.OrderType(o.Type),
+		Side:                     models.SideType(o.Side),
+		SelfTradePreventionMode:  models.SelfTradePreventionMode(o.SelfTradePreventionMode),
 	}, nil
 }
 
-func (c Client) ListOrders(ctx context.Context, r exchange.ListOrdersRequest) ([]*exchange.Order, error) {
+func (c Client) ListOrders(ctx context.Context, r models.ListOrdersRequest) ([]*models.Order, error) {
 	orders, err := c.b.NewListOrdersService().Symbol(r.Symbol).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*exchange.Order, len(orders))
+	res := make([]*models.Order, len(orders))
 	for i, o := range orders {
 		res[i] = utils.FromExtOrderToInt(o)
 	}
 	return res, err
 }
 
-func (c Client) ListOpenOrders(ctx context.Context, r exchange.ListOpenOrdersRequest) ([]*exchange.Order, error) {
+func (c Client) ListOpenOrders(ctx context.Context, r models.ListOpenOrdersRequest) ([]*models.Order, error) {
 	openOrders, err := c.b.NewListOpenOrdersService().Symbol(r.Symbol).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]*exchange.Order, len(openOrders))
+	res := make([]*models.Order, len(openOrders))
 	for i, o := range openOrders {
 		res[i] = utils.FromExtOrderToInt(o)
 	}
 	return res, err
 }
 
-func (c Client) GetAccount(ctx context.Context) (*exchange.Account, error) {
+func (c Client) GetAccount(ctx context.Context) (*models.Account, error) {
 	acc, err := c.b.NewGetAccountService().OmitZeroBalances(true).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	balances := make([]exchange.Balance, len(acc.Balances))
+	balances := make([]models.Balance, len(acc.Balances))
 	for i, b := range acc.Balances {
-		balances[i] = exchange.Balance(b)
+		balances[i] = models.Balance(b)
 	}
-	return &exchange.Account{
+	return &models.Account{
 		MakerCommission:  acc.MakerCommission,
 		TakerCommission:  acc.TakerCommission,
 		BuyerCommission:  acc.BuyerCommission,
 		SellerCommission: acc.SellerCommission,
-		CommissionRates:  exchange.CommissionRates(acc.CommissionRates),
+		CommissionRates:  models.CommissionRates(acc.CommissionRates),
 		CanTrade:         acc.CanTrade,
 		CanWithdraw:      acc.CanWithdraw,
 		CanDeposit:       acc.CanDeposit,

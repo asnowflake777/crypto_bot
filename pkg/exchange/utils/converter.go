@@ -7,11 +7,11 @@ import (
 
 	"github.com/adshao/go-binance/v2"
 
-	"crypto_bot/pkg/exchange"
+	"crypto_bot/pkg/exchange/models"
 )
 
-func FromExtKlineToInt(kline *binance.Kline) *exchange.Kline {
-	return &exchange.Kline{
+func FromExtKlineToInt(kline *binance.Kline) *models.Kline {
+	return &models.Kline{
 		OpenTime:                 kline.OpenTime,
 		Open:                     Str2float(kline.Open),
 		High:                     Str2float(kline.High),
@@ -26,11 +26,11 @@ func FromExtKlineToInt(kline *binance.Kline) *exchange.Kline {
 	}
 }
 
-func FromExtWsKlineEventToInt(event *binance.WsKlineEvent) *exchange.WsKlineEvent {
+func FromExtWsKlineEventToInt(event *binance.WsKlineEvent) *models.WsKlineEvent {
 	if event == nil {
 		return nil
 	}
-	return &exchange.WsKlineEvent{
+	return &models.WsKlineEvent{
 		Event:  event.Event,
 		Time:   event.Time,
 		Symbol: event.Symbol,
@@ -38,8 +38,8 @@ func FromExtWsKlineEventToInt(event *binance.WsKlineEvent) *exchange.WsKlineEven
 	}
 }
 
-func FromExtWsKlineToInt(kline binance.WsKline) exchange.WsKline {
-	return exchange.WsKline{
+func FromExtWsKlineToInt(kline binance.WsKline) models.WsKline {
+	return models.WsKline{
 		StartTime:            kline.StartTime,
 		EndTime:              kline.EndTime,
 		Symbol:               kline.Symbol,
@@ -59,8 +59,8 @@ func FromExtWsKlineToInt(kline binance.WsKline) exchange.WsKline {
 	}
 }
 
-func FromExtOrderToInt(o *binance.Order) *exchange.Order {
-	return &exchange.Order{
+func FromExtOrderToInt(o *binance.Order) *models.Order {
+	return &models.Order{
 		Symbol:                   o.Symbol,
 		OrderID:                  o.OrderID,
 		OrderListId:              o.OrderListId,
@@ -69,10 +69,10 @@ func FromExtOrderToInt(o *binance.Order) *exchange.Order {
 		OrigQuantity:             Str2float(o.OrigQuantity),
 		ExecutedQuantity:         Str2float(o.ExecutedQuantity),
 		CummulativeQuoteQuantity: Str2float(o.CummulativeQuoteQuantity),
-		Status:                   exchange.OrderStatusType(o.Status),
-		TimeInForce:              exchange.TimeInForceType(o.TimeInForce),
-		Type:                     exchange.OrderType(o.Type),
-		Side:                     exchange.SideType(o.Side),
+		Status:                   models.OrderStatusType(o.Status),
+		TimeInForce:              models.TimeInForceType(o.TimeInForce),
+		Type:                     models.OrderType(o.Type),
+		Side:                     models.SideType(o.Side),
 		StopPrice:                Str2float(o.StopPrice),
 		IcebergQuantity:          Str2float(o.IcebergQuantity),
 		Time:                     o.Time,

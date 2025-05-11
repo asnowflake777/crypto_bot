@@ -1,14 +1,8 @@
-package exchange
-
-import "context"
+package models
 
 type WsKlineRequest struct {
 	Symbol   string
 	Interval string
-}
-
-type WsKlinesService interface {
-	WsKlines(context.Context, WsKlineRequest) (<-chan *WsKlineEvent, <-chan error, error)
 }
 
 type WsKlineEvent struct {

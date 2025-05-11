@@ -1,14 +1,4 @@
-package exchange
-
-import "context"
-
-type OrderService interface {
-	CreateOrder(context.Context, CreateOrderRequest) (*CreateOrderResponse, error)
-	GetOrder(context.Context, ReadOrderRequest) (*Order, error)
-	CancelOrder(context.Context, CancelOrderRequest) (*CancelOrderResponse, error)
-	ListOrders(context.Context, ListOrdersRequest) ([]*Order, error)
-	ListOpenOrders(context.Context, ListOpenOrdersRequest) ([]*Order, error)
-}
+package models
 
 type Order struct {
 	Symbol                   string          `json:"symbol"`

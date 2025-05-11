@@ -1,10 +1,4 @@
-package exchange
-
-import "context"
-
-type KlinesService interface {
-	Klines(ctx context.Context, request KlinesRequest) (res []*Kline, err error)
-}
+package models
 
 type Kline struct {
 	OpenTime                 int64   `json:"openTime"`
