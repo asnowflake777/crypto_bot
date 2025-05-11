@@ -1,18 +1,22 @@
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
-name: Go
+name: Release watcher
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    paths:
+      - cmd/watcher/*
+      - pkg/*
 
 jobs:
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, Linux, X64 ]
+    defaults:
+      run:
+        working-directory: cmd/watcher
     steps:
     - uses: actions/checkout@v4
 
@@ -21,8 +25,14 @@ jobs:
       with:
         go-version: '1.23.2'
 
-    - name: Build
-      run: go build -v ./...
+    - name: Tidy up mod
+      run: go mod tidy
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v crypto_bot/cmd/watcher...
+      
+    - name: Build to /app/lib
+      run: go build -o /app/crypto_bot_watcher/crypto_bot_watcher main.go
+
+    - name: Restart service
+      run: sudo systemctl restart crypto_bot_watcher.service
